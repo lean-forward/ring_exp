@@ -1,0 +1,177 @@
+\documentclass{article}
+
+\usepackage{listings}
+
+\title{A tactic for normalising ring expressions with exponents}
+
+\newcommand{\ringexp}{\texttt{ring\_exp}}
+
+\begin{document}
+\maketitle
+
+Abstract:
+This paper describes the design of the normalising tactic \ringexp for the Lean prover.
+This tactic improves on existing tactics by adding a binary exponent operator to the language of rings.
+A normal form is represented with an inductive family of types, enforcing various invariants.
+The design can also be extended with more operators.
+
+Introduction
+------------
+
+We can use a normalising tactic to prove equalities.
+Examples in mathlib: `norm\_cast`, `norm\_num`, `ring`, `simp`, ...
+
+The Lean mathematical library already had a tactic `ring` for commutative rings.
+The `ring` tactic is useful: occurs $N$ times in the mathlib code base.
+Can also be used as components of other tactics: `linarith`, `omega`, ...
+
+Horner normal forms cannot represent compound exponents.
+
+Exponents also result in heterogeneous expressions: $a^b$ has $a : α$ for any ring, but $b : ℕ$.
+
+The goal was to make a tactic \ringexp whose domain is a strict superset of `ring`'s.
+This was possible without sacrificing the efficiency of `ring`.
+An additional result is that the design is extensible to more operators.
+
+Overview of the tactic
+----------------------
+
+The \ringexp tactic uses a similar normalisation scheme as the original `ring` tactic.
+The input to the normaliser is an abstract syntax tree representation of the expression to normalise.
+% Lean makes the syntax available for metaprogramming as terms of type `expr`.
+The input is evaluated by the `eval` function to give a term in an inductive type of normalised expressions, here called `ex`.
+From the `ex` representation, the normalised output expression is constructed by the `simple` function,
+which also returns a proof that the in- and output expression are equal.
+The normal form should be designed in such a way that values of type `ex` are equal if and only if the input expressions are equal.
+%The `ex` representation is also used by an additional tactic `ring_exp_eq` to test expressions for equality.
+
+In addition to the language of semirings implemented by `ring`, with binary operators $+$, $*$ and optionally $-$ and $/$,
+the \ringexp tactic supports a binary exponentiation operator $\^$.
+The input expression can consist of any of these operators applied to other expressions,
+with two base cases: rational numerals such as `0`, `37` and `2/3` and atoms.
+An atom is any expression which is not of the above form, e.g. a variable name `x` or a function application `f (x - 2)`,
+which are treated as arbitrary constants in the expression.
+The language parsed by \ringexp should not be confused with that of an `exponential ring', which is a ring $(R, +, *)$ equipped with a unary operator $E$ which is a monoid homomorphism $(R, +) \to (R^*, *)$.
+
+%For instance, each expression in the language of monoids (with associative operator $*$ and neutral element $1$) has a list of atoms as normal form;
+%the conversion interprets $*$ as list concatenation `++` and $1$ as the empty list `nil`.
+%Adding an associative, distributive $+$ operator will give the language of semirings,
+%and by distributivity, we can always rewrite in such a way that the arguments to $*$ are not sums.
+%This allows us to write a polynomial as a sum of monomials, which are themselves products of atoms.
+%The exponentation operator, however, does not have such nice associativity or distributivity properties:
+%in general, only `(a ^ b)^c = a ^ (b * c)` and `(a * b)^c = a^c * b^c` hold.
+
+Using a suitable representation of the normal form is crucial for correctness of the normaliser.
+The `ex` normal form is a tree with operators at the nodes and atoms at the leaves,
+with certain restrictions on which subnodes may occur for each node.
+Compared to the abstract syntax tree, this will prohibit subexpressions that are not normalised.
+For example, associativity allows rewriting $(a * b) * c$ to $a * (b * c)$ and distributivity allows rewriting $(a + b) * c$ to $(a * c) + (b * c)$,
+which leads to the rule that the left argument to $*$ cannot be of the form $a + b$ or $a * b$.
+These restrictions are expressed in the `ex` type by parametrising it over the enum `ex\_type`,
+giving an inductive family of types.
+Each constructor only allows certain members of the `ex` family in its arguments,
+and returns a specific type of `ex`:
+
+\begin{lstlisting}
+	meta inductive ex : ex_type → Type
+	| zero  :                     ex sum
+	| sum   : ex prod → ex sum  → ex sum
+	| coeff : coeff             → ex prod
+	| prod  : ex exp  → ex prod → ex prod
+	| exp   : ex base → ex prod → ex exp
+	| var   : atom              → ex base
+	| sum_b : ex sum            → ex base
+\end{lstlisting}
+
+Here, the `sum` constructor represents $+$, `prod` represents $*$ and `exp` represents $\^$,
+%the `zero` and `coeff` constructors represent zero and non-zero numeric coefficients,
+the `var` constructor represents an atom and `sum\_b` allows sums as the base of expressions, analogous to the brackets in $(a + b) ^ c$.
+Thus, the restriction that $+$ and $*$ cannot occur as the left argument to $*$,
+is reflected by the first argument to `prod` being `ex exp`, which must be of the form $a ^ b$.
+Similarly, the `sum` constructor has arguments `ex prod` and `ex sum`, reflecting that the $+$ operator is re-associated to the right in the normal form.
+% Some further examples on how the equalities are reflected in the types?
+
+% TODO: explain this better:
+Not only does `ex` prohibit a `sum` as the left argument to `sum`,
+it also prohibits `exp`.
+The reason for this can be read from the matrix of equalities.
+Putting the outermost operator in a matrix gives:
+\begin{tabular}{l l l l}
+$l \backslash r$	& $+$	& $*$	& $\^$	\\
+$+$	& $+$ $+$	& $+$ $+$	& $+$ $\^$	\\
+$*$	& $+$ $+$	& $*$ $*$	& $*$ $*$	\\
+$\^$	& $*$ $+$	& $\^$ $*$	& $\^$ $\^$	\\
+\end{tabular}
+From the matrix, we can see that sums cannot be rewritten as a product or exponent
+and products cannot be rewritten as exponents,
+but the other way can occur: the distributivity rule $a * (b + c) = (a * b) + (a * c)$ rewrites a product into a sum.
+Thus, allowing for exponentiation implies allowing for multiplication, which implies allowing for addition.
+
+While the `ex` type enforces that some normalisation rules are always applied,
+others cannot be easily expressed in the type system.
+For instance, the $+$ and $*$ operators are also commutative,
+but this is not reflected in the definition of the `ex` type.
+In Lean, testing for (definitional) equality of expressions is a monadic operation,
+so it is impossible to take the quotient modulo different permutations of the list of terms.
+Instead, the operations on `ex` have to manually maintain the invariants that guarantee unique representation.
+
+Some examples where the types are incomplete, and how the tactic mitigates that.
+
+The `ex\_info` type allows us to (re)construct the proof that normalisation is correct.
+For each operation, instantiate correctness proof (properties are subtle to express) and combine these while evaluating.
+
+The setup makes it easy to extend `ex` with another operator by adding a new constructor.
+
+Complications
+-------------
+
+Dealing with atoms (expressions not parsed by \ringexp):
+keep a list of all unique (modulo definitional equality) atoms encountered, compare on index into list (not structure of atom!).
+
+Commutativity: commutative operators sort arguments by picking an order on `ex`.
+Order should be consistent (Lean's expr.has\_lt is not): order atoms by appearance, the rest lexicographically.
+
+Dealing with $a ^ b$: interpret $b$ as a natural number (integer?):
+use a reader monad to keep track of the expression's inferred type.
+
+Dealing with numerals: don't unfold `2 * a` to `a + a`, but fold `1 * a + 1 * a` to `2 * a`.
+But when adding, the tactic needs to keep track of overlap.
+
+Dealing with $a - b$: rewrite to $a + (-1) * b$.
+Dealing with $a / b$: rewrite to $a * b^(-1)$.
+
+Normalising atoms as well: \ringexp feeds the normaliser to `simp`.
+
+Optimisations
+-------------
+
+An important reason to prefer \ringexp over `simp` is that \ringexp should be faster.
+It will be called often as part of various other tactics: `linarith`, ...
+
+The `ring` tactic is successful, so it will be the reference point.
+
+Optimisations:
+Making the tactic fast enough took some work:
+- The tactic precomputes typeclass instances because typeclass inference can be very expensive.
+- The numerals `0` and `1` are also precomputed.
+- Although the proofs can take implicit arguments, they are all made explicit.
+- During construction of an `ex`, the correctness proof ``migrates outward'', saving memory by discarding the proofs in subexpressions.
+
+Results of optimising:
+Empirically, there is only a constant factor slowdown compared to `ring`:
+1.6 times in the case of linear expressions (i.e. `linarith`).
+Faster than `ring` for e.g. $(x + 1)^4 = (1 + x)^4$.
+
+Some graphs with nice regression lines.
+
+To test, replace the implementation of `ring` with \ringexp in mathlib: no errors, same compilation time.
+
+Discussion
+----------
+
+The \ringexp tactic can deal with a strict superset of expressions,
+and does so without sacrificing too much speed.
+
+The approach should be adaptable to extra operators (gcd? min/max?) and similar problem domains (lattices? propositions?).
+Can we automate the construction of the `ex` type? (Probably not?)
+\end{document}
