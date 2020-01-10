@@ -289,6 +289,9 @@ the running time is decreased because there are less terms to type check.
 
 The result of these optimisations can be quantified by comparing the running time
 of the \lean{ring} and \ringexp tactics: \ringexp should not be noticeably slower than \lean{ring}.
+To verify this, we compare the performance of \lean{ring} and \ringexp on randomly generated expressions,
+with a special case for linear expressions, to simulate input from \lean{linarith}.
+
 
 Results of optimising:
 Empirically, there is only a constant factor slowdown compared to `ring`:
