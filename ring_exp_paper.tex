@@ -307,6 +307,9 @@ Not only does discarding these terms reduce memory usage,
 the running time is decreased because terms to be type checked are smaller.
 %The final benefit is for debugging: the representation of \lean{ex} is simpler.
 
+%Another test involved replacing all calls to \ring with \ringexp in the compilation of \texttt{mathlib}.
+%The compilation time in both cases was approximately the same:
+
 The result of these optimisations can be quantified by comparing the running time
 of the \lean{ring} and \ringexp tactics: \ringexp should not be noticeably slower than \lean{ring}.
 To verify this, we compare the performance of \lean{ring} and \ringexp on randomly generated expressions,
@@ -315,16 +318,21 @@ The performance measure is the tactic execution time reported by the Lean profil
 running on an IntelⓇ Core™ i5-8500 CPU @ 6x3.00GHz with 16 GB of RAM.
 On the linear expressions, the benchmark indicates that \ringexp is $1.68372 \pm 0.004516$ times slower than \ring;
 on arbitrary expressions, \ringexp is $3.41287 \pm 0.05576$ times slower than \ring.
-More optimisations should lead to even better performance.
 
-\begin{figure}
-\input{linexpr.tex}
-\caption{Running time of \ring and \ringexp on linear expressions.}
-\end{figure}
-\begin{figure}
-\input{expr-small.tex}
-\caption{Running time of \ring and \ringexp on arbitrary expressions.}
-\end{figure}
+%Apart from checking running time, these tests served to verify that \ringexp can parse arbitrary expressions.
+% During development, \texttt{mathlib} was compiled with all calls to \ring replaced with \ringexp.
+% This ensured that \ringexp serves as a drop-in replacement for \ring.
+% with ring: lean --make src/all.lean  3444.96s user 6.63s system 556% cpu 10:19.94 total
+% 
+
+%\begin{figure}
+%\input{linexpr.tex}
+%\caption{Running time of \ring and \ringexp on linear expressions.}
+%\end{figure}
+%\begin{figure}
+%\input{expr-small.tex}
+%\caption{Running time of \ring and \ringexp on arbitrary expressions.}
+%\end{figure}
 
 %\begin{figure}
 %\centering
@@ -333,21 +341,18 @@ More optimisations should lead to even better performance.
 %\subfloat[Running time of \ring and \ringexp on arbitrary expressions (detail).]{\resizebox{0.3\textwidth}{!}{\input{expr-small.tex}}}
 %\end{figure}
 
-Results of optimising:
-Empirically, there is only a constant factor slowdown compared to `ring`:
-Faster than `ring` for e.g. $(x + 1)^4 = (1 + x)^4$.
-
-Some graphs with nice regression lines.
-
-To test, replace the implementation of `ring` with \ringexp in mathlib: no errors, same compilation time.
-
-\section{Discussion}
-
-The \ringexp tactic can deal with a strict superset of expressions,
-and does so without sacrificing too much speed.
-
-The approach should be adaptable to extra operators (gcd? min/max?) and similar problem domains (lattices? propositions?).
-Can we automate the construction of the `ex` type? (Probably not?)
+\section{Conclusion}
+Compared to the \ring tactic, the \ringexp tactic can deal with a strict superset of expressions,
+and can do so without sacrificing too much speed.
+There is still some work to do before \ringexp can fully replace \ring:
+more optimisation is needed to ensure \ringexp is at least as fast as \ring in all cases.
+Another avenue for further work is to add support for more operators to \ringexp,
+which should be simple because of the extensibility of \ex:
+perhaps the modulo operator $\%$, $\min$ and $\max$ are good candidates.
+Alternatively, it should be possible to adapt the \ex type to other algebraic structures
+such as lattices or vector fields.
+An interesting question is whether it is possible to automatically derive an appropriate \ex type
+and its operations, given a set of distributivity, associativity and commutativity relations.
 
 \printbibliography
 \end{document}
