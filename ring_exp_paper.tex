@@ -2,18 +2,23 @@
 
 \usepackage{amsmath}
 \usepackage{amssymb}
-\usepackage{biblatex}
+\usepackage[style=numeric]{biblatex}
 \usepackage{graphicx}
 \usepackage{hyperref}
 \usepackage{layouts}
-\usepackage{listings}
+\usepackage{minted}
 \usepackage{makecell}
 \usepackage[caption=false]{subfig}
+\usepackage{xcolor}
 \usepackage{xspace}
 
-\title{A tactic for normalising ring expressions with exponents (short paper)}
-\author{Anne Baanen\\\email{t.baanen@vu.nl}}
-\institute{Vrije Universiteit Amsterdam}
+\renewcommand\UrlFont{\color{blue}\rmfamily}
+
+\title{A Lean tactic for normalising ring\\ expressions with exponents (short paper)}
+\titlerunning{A Lean tactic for normalising ring expressions with exponents}
+\author{Anne Baanen}
+\authorrunning{T. Baanen}
+\institute{Vrije Universiteit Amsterdam, Netherlands\\\email{t.baanen@vu.nl}}
 
 \newcommand{\N}{\mathbb{N}}
 \newcommand{\Q}{\mathbb{Q}}
@@ -50,7 +55,7 @@ In the mathematical library for the Lean theorem prover (\texttt{mathlib})~\cite
 the \lean{ring} tactic normalises polynomials, i.e. expressions in a commutative (semi)-ring~\cite{mathlib}.
 The \ring tactic can be directly invoked by the user
 and is used as a component of the decision procedure \lean{linarith}.
-The utility of the \lean{ring} tactic is evident from the fact that it is invoked over 300 times in \texttt{mathlib}
+The utility of the \lean{ring} tactic is evident from the fact that it is invoked over 300 times in \texttt{mathlib}.
 
 The \lean{ring} tactic in Lean, and the tactic in Coq it is based on,
 use a Horner normal form representation of polynomials~\cite{ring-tactic}.
@@ -62,13 +67,12 @@ either it is constant ($f(x) = c$), or it is of the form $f(x) = g(x) * x + c$.
 This representation
 % generalised to multivariate polynomials over arbitrary (semi)rings
 allows \lean{ring} to uniquely and efficiently represent any expression consisting of the operators $+$ and $*$, rational numerals and variables.
-Problems arise for expressions containing other operators than $+$ and $*$.
+Problems arise for expressions containing other operators than $+$ and $*$. % TODO: introduce running example here!
 % The exponent operator \pow can be converted to a repeated multiplication only when it is applied to a numeric exponent.
 % When the exponent is itself a compound expression,
 A fundamental assumption is that the degree of each term is a constant number,
 meaning the Horner form cannot be simply modified to represent $2^x$ where $x$ is a variable,
 or more generally to represent the exponentiation operator \pow applied to compound expressions.
-% TODO: explain more?
 
 % Exponents also result in heterogeneous expressions: $a^b$ has $a : α$ for any ring, but $b : ℕ$.
 
@@ -127,16 +131,16 @@ giving an inductive family of types.
 Each constructor only allows certain members of the \ex family in its arguments,
 and returns a specific type of \ex:
 
-\begin{lstlisting}
-	meta inductive ex : ex_type -> Type
-	| zero  :                       ex sum  -- 0
-	| sum   : ex prod -> ex sum  -> ex sum  -- +
-	| coeff : coeff              -> ex prod
-	| prod  : ex exp  -> ex prod -> ex prod -- *
-	| exp   : ex base -> ex prod -> ex exp  -- ^
-	| var   : atom               -> ex base
-	| sum_b : ex sum             -> ex base
-\end{lstlisting} % TODO: alignment
+\begin{minted}{lean}
+inductive ex : ex_type -> Type
+| zero  :                       ex sum  -- 0
+| sum   : ex prod -> ex sum  -> ex sum  -- +
+| coeff : coeff              -> ex prod
+| prod  : ex exp  -> ex prod -> ex prod -- *
+| exp   : ex base -> ex prod -> ex exp  -- ^
+| var   : atom               -> ex base
+| sum_b : ex sum             -> ex base
+\end{minted}
 
 %Here, the `sum` constructor represents $+$, `prod` represents $*$ and `exp` represents $\^$,
 %the `zero` and `coeff` constructors represent zero and non-zero numeric coefficients,
@@ -147,14 +151,14 @@ A more complicated example is that $\frac{2}{3} y^{2^k} z - x$ is represented as
 
 \begin{table}
 \centering
+\caption{Associativity and distributivity properties of the $+$, $*$ and \pow operators.}
+\label{tab:assoc-distrib}
 \begin{tabular}{l | c c c}
 	& $+$	& $*$	& \pow	\\ \hline
 $+$	& $(a + b) + c = a + (b + c)$	& --	& -- 	\\
 $*$	& \makecell{$(a + b) * c = a * c + b * c$; \\ $a * (b + c) = a * b + a * c$}	& $(a * b) * c = a * (b * c) $	& -- 	\\
 \pow	& $a ^ {b + c} = a ^ b + a ^ c$	& $(a * b) ^ c = a^c * b^c$	& $a^{b^c} = a^{b * c}$	\\
 \end{tabular}
-\caption{Associativity and distributivity properties of the $+$, $*$ and \pow operators.}
-\label{tab:assoc-distrib}
 \end{table}
 %Thus, the restriction that $+$ and $*$ cannot occur as the left argument to $*$,
 %is reflected by the first argument to `prod` being `ex exp`, which must be of the form $a ^ b$.
@@ -272,8 +276,6 @@ Within atoms, there may be subexpressions that can be normalised as well.
 Instead of running the normaliser directly, \ringexp calls the built-in tactic \lean{simp} with the normaliser as an argument.
 The \lean{simp} tactic calls a given normaliser on each subexpression,
 rewriting it when the normaliser succeeds.
-
-% TODO: testing the tactic?
 
 \section{Optimisations}
 
