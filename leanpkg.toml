@@ -1,0 +1,8 @@
+[package]
+name = "ring_exp"
+version = "0.1"
+lean_version = "3.4.2"
+path = "src"
+
+[dependencies]
+mathlib = {git = "https://github.com/leanprover-community/mathlib", rev = "5c09372658861c46bb4bf8d2b399601c5a711bb4"}

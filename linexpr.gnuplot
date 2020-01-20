@@ -1,6 +1,6 @@
 set datafile separator ","
-set terminal epslatex
-set output "linexpr.tex"
+set terminal png
+set output "output/linexpr.png"
 set xrange[1:600]
 set yrange[1:1000]
 f(x) = a * x

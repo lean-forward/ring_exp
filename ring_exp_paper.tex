@@ -333,9 +333,9 @@ The result of these optimisations can be quantified by comparing the running tim
 \footnote{The benchmark program and an analysis script is available at \url{https://github.com/lean-forward/ring_exp}.}
 The performance measure is the tactic execution time reported by the Lean profiler,
 running on a 3 GHz Intel\textregistered\xspace Core\texttrademark\xspace i5-8500 CPU with 16 GB of RAM.
-On arbitrary expressions, the benchmark indicates that \ringexp is a constant factor of approximately $3.41$ times slower than \ring;
+On arbitrary expressions, the benchmark indicates that \ringexp is a constant factor of approximately $3.88$ times slower than \ring;
 on linear expressions such as passed by \lean{linarith}, 
-\ringexp is $1.68$ times slower than \ring.
+\ringexp is $1.67$ times slower than \ring.
 % The benchmark also serves as a correctness test for \ringexp, checking that arbitrary expressions are correctly handled.
 
 %Apart from checking running time, these tests served to verify that \ringexp can parse arbitrary expressions.

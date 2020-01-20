@@ -1,6 +1,6 @@
 set datafile separator ","
-set terminal epslatex
-set output "expr-small.tex"
+set terminal png
+set output "output/expr-small.png"
 set xrange[1:600]
 set yrange[1:1000]
 f(x) = a * x
