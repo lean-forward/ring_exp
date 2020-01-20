@@ -57,7 +57,7 @@ Given an expression $a$, these tactics return an expression $a'$ in normal form 
 %Such tactics are metaprograms which can be applied to an expression $a$,
 %and return an expression $a'$ in normal form, together with a proof term showing $a = a'$;
 %to prove $a = b$ it suffices to normalise $a'$ and $b'$ and show $a' = b'$.
-For instance, in the mathematical library for the Lean theorem prover, \mathlib~\cite{lean-prover},
+For instance, in \mathlib, the mathematical library for the Lean theorem prover~\cite{lean-prover},
 %several normalising tactics are included~\cite{mathlib}.
 %Among others,
 %\lean{norm\_cast} normalises type coercions in an expression,
@@ -66,7 +66,7 @@ the \lean{ring} tactic normalises % polynomials, i.e.
 expressions in a commutative (semi)ring~\cite{mathlib}.
 The \ring tactic can be directly invoked by the user
 and is called by the decision procedure \lean{linarith}.
-The utility of the \lean{ring} tactic is evident from the fact that it is invoked over 300 times in \mathlib. % TODO: reword this sentence!
+In \mathlib, \ring is invoked over 300 times, demonstrating its utility.
 
 The \lean{ring} tactic in Lean, and the tactic in Coq it is based on,
 use a Horner normal form representation of polynomials~\cite{ring-tactic}.
@@ -77,7 +77,8 @@ The Horner form represents a polynomial $f$ with one of two cases:
 either it is constant ($f(x) = c$), or it is of the form $f(x) = g(x) * x + c$.
 This representation
 % generalised to multivariate polynomials over arbitrary (semi)rings
-allows \lean{ring} to uniquely and efficiently represent any expression consisting of the operators $+$ and $*$, rational numerals and variables.
+allows \lean{ring} to uniquely and efficiently represent any polynomial,
+i.e. any expression consisting of the operators $+$ and $*$, rational numerals and variables.
 Problems arise when expressions include other operators than $+$ and $*$, such as the exponentiation operator \pow.
 % such as the expression $2^n - 1$ representing an arbitrary Mersenne number.
 % The exponent operator \pow can be converted to a repeated multiplication only when it is applied to a numeric exponent.
@@ -86,16 +87,15 @@ Problems arise when expressions include other operators than $+$ and $*$, such a
 The Horner form fundamentally assumes the degree of a term is a constant integer,
 so it cannot be simply modified to represent variable exponents,
 or more generally to represent \pow applied to compound expressions.
-The result is that \ring cannot prove $2^{n+1} - 1 = 2 * 2^n - 1$.
+The result is that \ring cannot prove that $2^{n+1} - 1 = 2 * 2^n - 1$ for a free variable $n : \mathbb{N}$.
 
 % Exponents also result in heterogeneous expressions: $a^b$ has $a : α$ for any ring, but $b : ℕ$.
 
 The \ringexp tactic is a new normalisation tactic whose domain is a strict superset of \lean{ring}'s,
-making it a drop-in replacement that can additionally solve goals such as $2^{n+1} - 1 = 2 * 2^n - 1$.
+making it a drop-in replacement. % that can additionally solve goals such as $2^{n+1} - 1 = 2 * 2^n - 1$.
 In particular, \ringexp supports the operators $+$, $*$ and \pow, rational numerals and variables,
 and does so without sacrificing too much of the efficiency of \lean{ring}.
 This paper describes the design and engineering challenges encountered in implementing \ringexp.
-
 The paper discusses the version of \ringexp merged into \mathlib as of commit \texttt{5c09372658}.\footnote{Available at \url{https://github.com/leanprover-community/mathlib/tree/5c09372658}}.
 Additional code and setup instructions are available online.\footnote{\url{https://github.com/lean-forward/ring_exp}}
 
@@ -108,7 +108,7 @@ An \lean{eval} function maps inputs to a type \lean{ex} of normalised expression
 The normal form should be designed in such a way that values of type \lean{ex} are equal
 if and only if the input expressions can be proved equal using the axioms of semirings.
 From the \lean{ex} representation, the normalised output expression is constructed by the \lean{simple} function.
-Both functions additionally return a proof showing the input and output expressions are equal.
+Both \lean{eval} and \lean{simple} additionally return a proof showing the input and output expressions are equal.
 The \ringexp tactic does not use reflection but directly constructs proof terms, as is typical for tactics in \mathlib~\cite{mathlib}.
 %The `ex` representation is also used by an additional tactic `ring_exp_eq` to test expressions for equality.
 
@@ -118,7 +118,7 @@ The input expression can consist of these operators applied to other expressions
 with two base cases: rational numerals such as $0$, $37$ and $\frac{2}{3}$ and \emph{atoms}.
 An atom is any expression which is not of the above form, e.g. a variable name $x$ or a function application $\sin (x - 2)$,
 and is treated as an opaque variable in the expression.
-Two such expressions are considered equal if all variable assignments in any commutative ring give the same outcome.
+Two such expressions are considered equal if they evaluate to equal values for any assignment to the atoms, for all commutative rings.
 % The theory should not be confused with that of `exponential rings', which extends $+$ and $*$ with a unary operator $E$. %, which is a ring $(R, +, *)$ equipped with a unary operator $E$ which is a monoid homomorphism $(R, +) \to (R^*, *)$.
 
 %For instance, each expression in the language of monoids (with associative operator $*$ and neutral element $1$) has a list of atoms as normal form;
@@ -179,7 +179,7 @@ in the normalised form $(2+0)^{n^1 * 1} * 1 + (-1) + 0$ of the Mersenne number $
 	& $+$	& $*$	& \pow	\\ \hline
 $+$	& $(a + b) + c = a + (b + c)$	& ---	& --- 	\\
 $*$	& \makecell{$(a + b) * c = a * c + b * c$; \\ $a * (b + c) = a * b + a * c$}	& $(a * b) * c = a * (b * c) $	& --- 	\\
-\pow	& $a ^ {b + c} = a ^ b + a ^ c$	& $(a * b) ^ c = a^c * b^c$	& $a^{b^c} = a^{b * c}$	\\
+\pow	& $a ^ {b + c} = a ^ b + a ^ c$	& $(a * b) ^ c = a^c * b^c$	& $\left(a^b\right)^c = a^{b * c}$	\\
 \end{tabular}
 }
 \end{table}
@@ -198,7 +198,7 @@ By associativity (the diagonal entries of the table) the left argument to $+$ sh
 otherwise we can apply the rewrite rule $(a + b) + c \mapsto a + (b + c)$.
 Analogously, the left argument to the \lean{prod} constructor is not an \lean{ex prod} but an \lean{ex exp},
 % and the right argument to the \lean{exp} constructor is not an \lean{ex exp} but an \lean{ex prod}.
-and the right argument to \lean{exp} is an \lean{ex prod}.
+and the left argument to \lean{exp} is an \lean{ex base}.
 
 %\begin{align*}
 %	0 &\mapsto 0\\
@@ -214,7 +214,7 @@ The \lean{eval} function interprets each operator in the input expression as a c
 building a normal form for the whole expression out of normalised subexpressions.
 The operations on \ex build the correctness proof of normalisation out of the proofs for subexpressions
 using a correctness lemma: for example, \lean{add\_pf\_z\_sum : ps = 0 → qs = qs' → ps + qs = qs'} constructs this proof for the input expression \lean{ps + qs} when \lean{ps} normalises to $0$.
-These correctness proofs are stored in the \lean{ex\_info} record so they can be easily passed to other operations.
+These correctness proofs are stored in the \lean{ex\_info} record. % so they can be easily passed to other operations.
 
 Adding support for a new operator will take relatively little work:
 after extending the table of associativity and distributivity relations,
@@ -291,10 +291,8 @@ they should be treated as the same atom.
 The \lean{ring\_exp\_m} monad contains a state monad transformer to keep track of which atoms are definitionally equal.
 The state consists of a list of all distinct atoms encountered in the whole input expression,
 and any comparisons between atoms are instead made by comparing their indices in the list.
-An additional benefit is that the indices fix a consistent ordering on the atoms in an expression,
-used to keep arguments to commutative operators in sorted order.
+An additional benefit is that the indices induce an order on atoms, which is used to sort arguments to commutative operators.
 % whereas Lean's built-in order can vary between executions
-
 Within atoms, there may be subexpressions that can be normalised as well.
 %For example, the argument to $\cos$.
 Instead of running the normaliser directly, \ringexp calls the built-in tactic \lean{simp} with the normaliser as an argument.
@@ -308,11 +306,12 @@ Among the 300 calls to \ring in \mathlib, approximately half are invocations on 
 Since \ringexp is intended to work as a drop-in replacement for \lean{ring},
 its performance characteristics, especially for linear expressions, should be comparable.
 
-Optimising the code was a notable part of the implementation of \ringexp,
-guided by Lean's built-in profiler.
-Originally, the tactic used Lean's elaborator to fill in implicit arguments and typeclass instances when constructing terms.
-Profiling revealed that up to 90\% of running time could be spent in elaboration.
-The solution was to supply all arguments explicitly and maintain a cache of typeclass instances,
+Optimising the code was a notable part of the implementation of \ringexp.
+% guided by Lean's built-in profiler.
+%Originally, the tactic used Lean's elaborator to fill in implicit arguments and typeclass instances when constructing terms.
+%Profiling revealed that up to 90\% of running time could be spent in elaboration.
+Profiling revealed that up to 90\% of running time could be spent in inferring implicit arguments and typeclass instances.
+The solution was to pass all arguments explicitly and maintain a cache of typeclass instances,
 also caching the expressions for the constants \lean{0} and \lean{1}.
 It was possible to make these changes without large changes to the codebase,
 because the required extra fields were hidden behind the \lean{ring\_exp\_m} and \lean{ex\_info} types.
@@ -324,16 +323,14 @@ Each \lean{ex} value carries its proof of normalisation,
 but as soon as an operation, such as adding two expressions $a$ and $b$, has finished,
 the normalisation proofs of $a$ and $b$ are no longer needed and are deleted.
 Similarly, any proof that reduces to reflexivity is deleted.
-Not only does discarding these terms reduce memory usage,
-the terms to be typechecked are smaller, directly reducing running time.
+This results in smaller proof terms, reducing memory usage and type checking time.
 %The final benefit is for debugging: the representation of \lean{ex} is simpler.
 
 %Another test involved replacing all calls to \ring with \ringexp in the compilation of \mathlib.
 %The compilation time in both cases was approximately the same:
 
-The result of these optimisations can be quantified by comparing the running time
-of the \lean{ring} and \ringexp tactics: \ringexp should not be noticeably slower than \lean{ring}.
-As a benchmark, we can compare the performance of \ring and \ringexp on randomly generated expressions.\footnote{The benchmark program and an analysis script is available at \url{https://github.com/lean-forward/ring_exp}.}
+The result of these optimisations can be quantified by comparing the running time of \ring and \ringexp on randomly generated expressions.%
+\footnote{The benchmark program and an analysis script is available at \url{https://github.com/lean-forward/ring_exp}.}
 The performance measure is the tactic execution time reported by the Lean profiler,
 running on a 3 GHz Intel\textregistered\xspace Core\texttrademark\xspace i5-8500 CPU with 16 GB of RAM.
 On arbitrary expressions, the benchmark indicates that \ringexp is a constant factor of approximately $3.41$ times slower than \ring;
@@ -363,7 +360,18 @@ on linear expressions such as passed by \lean{linarith},
 %\subfloat[Running time of \ring and \ringexp on arbitrary expressions (detail).]{\resizebox{0.3\textwidth}{!}{\input{expr-small.tex}}}
 %\end{figure}
 
-\section{Conclusions}
+\section{Discussion}
+
+The \ring tactic for Coq and Lean can efficiently convert expressions in the language of semirings to normal form.
+%HOL Light has the normalising procedure \texttt{SEMIRING\_NORMALIZERS\_CONV} for expressions in $+$ and $*$ (which also supports exponentiation with a constant exponent), analogous to \lean{ring}.
+% This procedure powers \texttt{NUM\_NORMALIZE\_CONV} and \texttt{REAL\_POLY\_CONV}.
+A normalizing procedure for polynomials is also included with HOL Light~\cite{hol_light} and Isabelle/HOL~\cite{isabelle_hol},
+and decision procedures exist that support exponential functions~\cite{resolution-rcf};
+none of these allows compound expressions in exponents.
+% \cite{coq-assoc-comm} is acrefl for coq, \cite{coq-lattices} uses a decision procedure without normalisation.
+% Term rewriting systems support compound exponents by adding the relevant equations,
+% but typically lack support for numerals.
+
 Compared with the \ring tactic, the \ringexp tactic can deal with a strict superset of expressions,
 and can do so without sacrificing too much speed.
 The extensible nature of the \ex type should make it simple to add support for more operators to \ringexp.
@@ -378,12 +386,14 @@ These results are as much a consequence of engineering effort as of theoretical 
 %and its operations, given a set of distributivity, associativity and commutativity relations.
 
 \paragraph{Acknowledgements}
-Floris van Doorn, Mario Carneiro and Robert Y. Lewis reviewed the code and
-suggested improvements. Many thanks for the help!
-% Readers: Jasmin Blanchette, Robert Y. Lewis, ...
-
 The author has received funding from the NWO under the Vidi program (project
 No. 016.Vidi.189.037, Lean Forward).
+
+Floris van Doorn, Mario Carneiro and Robert Y. Lewis reviewed the code and
+suggested improvements.
+Jasmin Blanchette and Robert Y. Lewis read this paper and gave useful suggestions.
+Many thanks for the help!
+% Readers: Jasmin Blanchette, Robert Y. Lewis, ...
 
 \printbibliography
 \end{document}
