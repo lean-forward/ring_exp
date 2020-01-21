@@ -66,7 +66,7 @@ the \lean{ring} tactic normalises % polynomials, i.e.
 expressions in a commutative (semi)ring~\cite{mathlib}.
 The \ring tactic can be directly invoked by the user
 and is called by the decision procedure \lean{linarith}.
-In \mathlib, \ring is invoked over 300 times, demonstrating its utility.
+The utility of \ring is evident from the fact that it is invoked over 300 times in \mathlib.
 
 The \lean{ring} tactic in Lean, and the tactic in Coq it is based on,
 use a Horner normal form representation of polynomials~\cite{ring-tactic}.
@@ -74,7 +74,7 @@ use a Horner normal form representation of polynomials~\cite{ring-tactic}.
 %$\lean{const}\ c$ for $c : \Q$ represents a constant polynomial $f(x) = c$,
 %and $\lean{xadd}\ g\ c$ for $g : \lean{horner}, c : \Q$ represents the polynomial $f(x) = g(x) * x + c$.
 The Horner form represents a polynomial $f$ with one of two cases:
-either it is constant ($f(x) = c$), or it is of the form $f(x) = g(x) * x + c$.
+either it is constant ($f(x) = c$), or it is of the form $f(x) = c + x * g(x)$.
 This representation
 % generalised to multivariate polynomials over arbitrary (semi)rings
 allows \lean{ring} to uniquely and efficiently represent any polynomial,
@@ -118,7 +118,7 @@ The input expression can consist of these operators applied to other expressions
 with two base cases: rational numerals such as $0$, $37$ and $\frac{2}{3}$ and \emph{atoms}.
 An atom is any expression which is not of the above form, e.g. a variable name $x$ or a function application $\sin (x - 2)$,
 and is treated as an opaque variable in the expression.
-Two such expressions are considered equal if they evaluate to equal values for any assignment to the atoms, for all commutative rings.
+Two such expressions are considered equal if in every commutative ring they evaluate to equal values, for any assignment to the atoms.
 % The theory should not be confused with that of `exponential rings', which extends $+$ and $*$ with a unary operator $E$. %, which is a ring $(R, +, *)$ equipped with a unary operator $E$ which is a monoid homomorphism $(R, +) \to (R^*, *)$.
 
 %For instance, each expression in the language of monoids (with associative operator $*$ and neutral element $1$) has a list of atoms as normal form;
@@ -159,12 +159,11 @@ inductive ex : ex_type → Type
 %Here, the `sum` constructor represents $+$, `prod` represents $*$ and `exp` represents $\^$,
 %the `zero` and `coeff` constructors represent zero and non-zero numeric coefficients,
 %the `var` constructor represents an atom and
+Each constructor additionally takes an \lean{ex\_info} record for auxiliary information used to construct correctness proofs.
 The \lean{sum\_b} constructor allows sums as the base of a power, analogously to the brackets in $(a + b) ^ c$.
-An \lean{ex\_info} record stores auxiliary information used to construct correctness proofs.
 For readability, we will write the representation in symbols instead of the constructors of \ex.
-Thus, $n^1 * 1$ stands for \lean{prod (exp (var n) (coeff 1)) (coeff 1)} (with \lean{ex\_info} fields omitted),
+Thus, the term \lean{prod (exp (var n) (coeff 1)) (coeff 1)} (with \lean{ex\_info} fields omitted) can be written as $n^1 * 1$
 in the normalised form $(2+0)^{n^1 * 1} * 1 + (-1) + 0$ of the Mersenne number $2^n - 1$.
-% TODO: parallelise
 % A more complicated example is that $\frac{2}{3} y^{2^k} z - x$ is represented as $x^1 * (-1) + \left(y^{(2 + 0)^{k * 1} * 1} * z^1 * \frac{2}{3} + 0\right)$.
 
 \begin{table}
@@ -235,7 +234,7 @@ but commutative semirings have more equations.
 % but this is not reflected in this definition of the \ex type:
 % if $a, b : \lean{ex prod}$, $a + (b + 0)$ and $b + (a + 0)$ represent the same expression.
 % $a + (b + 0)$ and $b + (a + 0)$ represent equal expressions.
-In a normal form, arguments to commutative operators should be sorted according to some linear order: if $a < b$, then $a + (b + 0)$ is normalised and $b + (a + 0)$ is not.
+In a normal form, arguments to commutative operators should be sorted according to some linear order $\prec$: if $a \prec b$, then $a + (b + 0)$ is normalised and $b + (a + 0)$ is not.
 Defining a linear order on \ex requires an order on atoms; definitional equality of atoms is tested in the \lean{tactic} monad~\cite{lean-tactics},
 so a well-defined order on atoms cannot be easily expressed on the type level.
 % Unfortunately, operations on expressions such as testing for definitional equality requires the usage of the \lean{tactic} monad~\cite{lean-tactics},
@@ -248,13 +247,13 @@ if the left argument to \pow is $0$ or $a * b + 0$, the expression is not in nor
 These invariants which are not enforced on the type level, are instead maintained by careful programming.
 A mistake in maintaining these invariants is not fatal: invariants only protect completeness, not soundness, of \ringexp.
 
-Careful treatment of numerals in expressions is required for acceptable runtime without sacrificing completeness.
+Efficient handling of numerals in expressions is required for acceptable runtime without sacrificing completeness.
 The tactic should not unfold expressions like $x * 1000$ as $1000$ additions of the variable $x$.
 Representing numerals with the \lean{coeff} constructor requires an extra step to implement addition.
 When terms overlap, differing only in the coefficients as for $a * b^2 * 1 + a * b^2 * 2$,
 their sum is given by adding their coefficients: $a * b^2 * 3$.
 Moreover, when the coefficients add up to $0$, the correct representation is not $a * b^2 * 0 : \lean{ex prod}$ but $0 : \lean{ex sum}$.
-The same extra step occurs for exponents: $x ^ {a * b^2 * 1} * x ^ {a * b^2 * 2} %
+Coefficients must also be handled correctly in exponents: $x ^ {a * b^2 * 1} * x ^ {a * b^2 * 2} %
 % = x ^ {a * b^2 * 1 + a * b^2 * 2}
 = x ^ {a * b^2 * 3}$.
 Both cases are handled by a function \lean{add\_overlap} which returns the correct sum if there is overlap,
@@ -310,10 +309,10 @@ Optimising the code was a notable part of the implementation of \ringexp.
 % guided by Lean's built-in profiler.
 %Originally, the tactic used Lean's elaborator to fill in implicit arguments and typeclass instances when constructing terms.
 %Profiling revealed that up to 90\% of running time could be spent in elaboration.
-Profiling revealed that up to 90\% of running time could be spent in inferring implicit arguments and typeclass instances.
+Profiling revealed that up to 90\% of running time could be spent on inferring implicit arguments and typeclass instances.
 The solution was to pass all arguments explicitly and maintain a cache of typeclass instances,
 also caching the expressions for the constants \lean{0} and \lean{1}.
-It was possible to make these changes without large changes to the codebase,
+It was possible to apply this solution without large changes to the codebase,
 because the required extra fields were hidden behind the \lean{ring\_exp\_m} and \lean{ex\_info} types.
 
 Since the tactic works bottom up,
@@ -330,7 +329,7 @@ This results in smaller proof terms, reducing memory usage and type checking tim
 %The compilation time in both cases was approximately the same:
 
 The result of these optimisations can be quantified by comparing the running time of \ring and \ringexp on randomly generated expressions.%
-\footnote{The benchmark program and an analysis script is available at \url{https://github.com/lean-forward/ring_exp}.}
+\footnote{The benchmark program and analysis scripts are available at \url{https://github.com/lean-forward/ring_exp}.}
 The performance measure is the tactic execution time reported by the Lean profiler,
 running on a 3 GHz Intel\textregistered\xspace Core\texttrademark\xspace i5-8500 CPU with 16 GB of RAM.
 On arbitrary expressions, the benchmark indicates that \ringexp is a constant factor of approximately $3.88$ times slower than \ring;
