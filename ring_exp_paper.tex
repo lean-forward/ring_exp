@@ -36,7 +36,6 @@
 \newcommand{\pow}{{${}^\wedge$}\xspace}
 \newcommand{\ring}{\lean{ring}}
 \newcommand{\ringexp}{\lean{ring\_exp}}
-\newcommand{\todo}[1]{{\color{red} TODO: #1}}
 
 \addbibresource{lean.bib}
 
@@ -64,7 +63,7 @@ For instance, in \mathlib, the mathematical library for the Lean theorem prover~
 %\lean{abel} normalises expressions in an Abelian group,
 the \lean{ring} tactic normalises % polynomials, i.e.
 expressions in a commutative (semi)ring~\cite{mathlib}.
-The \ring tactic can be directly invoked by the user
+This tactic can be directly invoked by the user
 and is called by the decision procedure \lean{linarith}.
 The utility of \ring is evident from the fact that it is invoked over 300 times in \mathlib.
 
@@ -96,27 +95,28 @@ making it a drop-in replacement. % that can additionally solve goals such as $2^
 In particular, \ringexp supports the operators $+$, $*$ and \pow, rational numerals and variables,
 and does so without sacrificing too much of the efficiency of \lean{ring}.
 This paper describes the design and engineering challenges encountered in implementing \ringexp.
-The paper discusses the version of \ringexp merged into \mathlib as of commit \texttt{5c09372658}.\footnote{Available at \url{https://github.com/leanprover-community/mathlib/tree/5c09372658}}.
+
+The version of \ringexp discussed in this paper has been merged into \mathlib as of commit \texttt{5c09372658}.\footnote{Available at \url{https://github.com/leanprover-community/mathlib/tree/5c09372658}.}
 Additional code and setup instructions are available online.\footnote{\url{https://github.com/lean-forward/ring_exp}}
 
-\section{Design}
+\section{Design overview}
 
 The \ringexp tactic uses a similar normalisation scheme to the original \ring tactic.
 The input from the tactic system is an abstract syntax tree representing the expression to normalise.
 % Lean makes the syntax available for metaprogramming as terms of type \lean{expr}.
 An \lean{eval} function maps inputs to a type \lean{ex} of normalised expressions.
 The normal form should be designed in such a way that values of type \lean{ex} are equal
-if and only if the input expressions can be proved equal using the axioms of semirings.
+if and only if the input expressions can be proved equal using the axioms of commutative semirings.
 From the \lean{ex} representation, the normalised output expression is constructed by the \lean{simple} function.
 Both \lean{eval} and \lean{simple} additionally return a proof showing the input and output expressions are equal.
 The \ringexp tactic does not use reflection but directly constructs proof terms, as is typical for tactics in \mathlib~\cite{mathlib}.
 %The `ex` representation is also used by an additional tactic `ring_exp_eq` to test expressions for equality.
 
-The language of (semi)rings implemented by \ring, with binary operators $+$, $*$ and optionally $-$ and $/$,
+The language of semirings implemented by \ring, with binary operators $+$, $*$ and optionally $-$ and $/$,
 is extended in \ringexp with a binary exponentiation operator \pow.
 The input expression can consist of these operators applied to other expressions,
 with two base cases: rational numerals such as $0$, $37$ and $\frac{2}{3}$ and \emph{atoms}.
-An atom is any expression which is not of the above form, e.g. a variable name $x$ or a function application $\sin (x - 2)$,
+An atom is any expression which is not of the above form, e.g. a variable name $x$ or a function application $\sin (y - z)$,
 and is treated as an opaque variable in the expression.
 Two such expressions are considered equal if in every commutative ring they evaluate to equal values, for any assignment to the atoms.
 % The theory should not be confused with that of `exponential rings', which extends $+$ and $*$ with a unary operator $E$. %, which is a ring $(R, +, *)$ equipped with a unary operator $E$ which is a monoid homomorphism $(R, +) \to (R^*, *)$.
@@ -159,9 +159,10 @@ inductive ex : ex_type → Type
 %Here, the `sum` constructor represents $+$, `prod` represents $*$ and `exp` represents $\^$,
 %the `zero` and `coeff` constructors represent zero and non-zero numeric coefficients,
 %the `var` constructor represents an atom and
-Each constructor additionally takes an \lean{ex\_info} record for auxiliary information used to construct correctness proofs.
+The additional \lean{ex\_info} record passed to the constructors contains auxilliary information used to construct correctness proofs.
 The \lean{sum\_b} constructor allows sums as the base of a power, analogously to the brackets in $(a + b) ^ c$.
-For readability, we will write the representation in symbols instead of the constructors of \ex.
+
+For readability, we will write the \ex representation in symbols instead of the constructors of \ex.
 Thus, the term \lean{prod (exp (var n) (coeff 1)) (coeff 1)} (with \lean{ex\_info} fields omitted) can be written as $n^1 * 1$
 in the normalised form $(2+0)^{n^1 * 1} * 1 + (-1) + 0$ of the Mersenne number $2^n - 1$.
 % A more complicated example is that $\frac{2}{3} y^{2^k} z - x$ is represented as $x^1 * (-1) + \left(y^{(2 + 0)^{k * 1} * 1} * z^1 * \frac{2}{3} + 0\right)$.
@@ -226,7 +227,7 @@ and add an operation on \ex that interprets the operator.
 % reads out the normalisation proofs from the \lean{ex\_info},
 % and uses these proofs to rewrite the expressions.
 
-\section{Complications} % TODO: A better word: intricacies?
+\section{Intricacies}
 
 The \ex type enforces that distributivity and associativity rules are always applied,
 but commutative semirings have more equations.
@@ -253,7 +254,7 @@ Representing numerals with the \lean{coeff} constructor requires an extra step t
 When terms overlap, differing only in the coefficients as for $a * b^2 * 1 + a * b^2 * 2$,
 their sum is given by adding their coefficients: $a * b^2 * 3$.
 Moreover, when the coefficients add up to $0$, the correct representation is not $a * b^2 * 0 : \lean{ex prod}$ but $0 : \lean{ex sum}$.
-Coefficients must also be handled correctly in exponents: $x ^ {a * b^2 * 1} * x ^ {a * b^2 * 2} %
+Coefficients must be treated similarly in exponents: $x ^ {a * b^2 * 1} * x ^ {a * b^2 * 2} %
 % = x ^ {a * b^2 * 1 + a * b^2 * 2}
 = x ^ {a * b^2 * 3}$.
 Both cases are handled by a function \lean{add\_overlap} which returns the correct sum if there is overlap,
