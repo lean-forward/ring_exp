@@ -94,7 +94,7 @@ In particular, \ringexp supports the operators $+$, $*$ and \pow, numerals and v
 and does so without sacrificing too much of the efficiency of \ring.
 This paper describes the design and engineering challenges encountered in implementing \ringexp.
 
-The version of \ringexp discussed in this paper has been merged into \mathlib as of commit \texttt{5c09372658}.\footnote{Available at \url{https://github.com/leanprover-community/mathlib/tree/5c09372658}.}
+The version of \ringexp discussed in this paper was merged into \mathlib in commit \texttt{5c09372658}.\footnote{\url{https://github.com/leanprover-community/mathlib/tree/5c09372658}}
 Additional code and setup instructions are available online.\footnote{\url{https://github.com/lean-forward/ring_exp}}
 
 \section{Design overview}
@@ -135,8 +135,9 @@ Using a suitable representation of the normal form is crucial to easily guarante
 %as a map from monomials to coefficients, where monomials themselves are maps from the variables to their exponent, as a natural number.
 %Neither representation can be easily extended with new operators,
 %so \ringexp introduces its own representation of expressions named \ex. 
-The \ex normal form used by \ringexp is a tree with operators at the nodes and atoms at the leaves,
-but prohibits classes of non-normalised expressions by restricting which sub-node can occur for each node.
+Since the Horner form cannot be easily generalised,
+\ringexp instead represents its normal form \ex as a tree with operators at the nodes and atoms at the leaves.
+Certain classes of non-normalised expressions are prohibited by restricting which sub-node can occur for each node.
 % Compared with the abstract syntax tree, this will prohibit certain non-normalised subexpressions.
 %For example, associativity allows rewriting $(a * b) * c$ to $a * (b * c)$ and distributivity allows rewriting $(a + b) * c$ to $(a * c) + (b * c)$,
 %which leads to the rule that the left argument to $*$ cannot be of the form $a + b$ or $a * b$.
@@ -168,11 +169,10 @@ in the normalised form $(2+0)^{n^1 * 1} * 1 + (-1) + 0$ of the Mersenne number $
 \begin{table}
 \centering
 \caption{Associativity and distributivity properties of the $+$, $*$ and \pow operators.}
-\def\arraystretch{1.5}%  1 is the default, change whatever you need
 \label{tab:assoc-distrib}
 {
 \setlength{\tabcolsep}{1em} % Add horizontal padding (absolute amount)
-\renewcommand{\arraystretch}{1.5}% Add vertical padding (relative amount)
+\renewcommand{\arraystretch}{1.7}% Add vertical padding (relative amount)
 \begin{tabular}{l | c c c}
 	& $+$	& $*$	& \pow	\\ \hline
 $+$	& $(a + b) + c = a + (b + c)$	& ---	& --- 	\\
@@ -268,7 +268,7 @@ The calculations of the \lean{eval} function are thus done in an extension of th
 , called the \lean{ring\_exp\_m} monad.
 Using a reader monad transformer~\cite{monad-transformers},
 \lean{ring\_exp\_m} stores the type of the current expression
-as a variable which can be swapped out when calling \lean{eval} on exponents.
+as a variable which can be swapped out when operating on exponents.
 
 Implementing subtraction and division also requires more work,
 since semirings in general do not have well-defined $-$ or $/$ operators.
