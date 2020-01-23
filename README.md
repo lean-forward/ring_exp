@@ -13,7 +13,7 @@ Within an editor, Lean can be used interactively with [lean-mode](https://github
 
 This repository depends on parts of [mathlib](https://github.com/leanprover-community/mathlib).
 To make working with mathlib easier, you can follow the [installation instructions for Mathlib](https://github.com/leanprover-community/mathlib#Installation), then run `leanpkg configure; update_mathlib` in this repository.
-Alternatively, if you prefer to wait several minutes over installing mathlib, you can run `leanpkg build` in this repository to compile all dependencies yourself.
+Alternatively, if you don't mind waiting a few minutes or the cached builds of `mathlib` are unavailable, you can run `leanpkg build` in this repository to compile all dependencies yourself.
 
 ## Running test cases
 
