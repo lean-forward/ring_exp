@@ -138,12 +138,12 @@ Using a suitable representation of the normal form is crucial to easily guarante
 %Neither representation can be easily extended with new operators,
 %so \ringexp introduces its own representation of expressions named \ex. 
 The \ex normal form used by \ringexp is a tree with operators at the nodes and atoms at the leaves,
-but prohibits classes of non-normalised expressions by restricting which subnode can occur for each node.
+but prohibits classes of non-normalised expressions by restricting which sub-node can occur for each node.
 % Compared with the abstract syntax tree, this will prohibit certain non-normalised subexpressions.
 %For example, associativity allows rewriting $(a * b) * c$ to $a * (b * c)$ and distributivity allows rewriting $(a + b) * c$ to $(a * c) + (b * c)$,
 %which leads to the rule that the left argument to $*$ cannot be of the form $a + b$ or $a * b$.
 The \ex type captures these restrictions through a parameter in the enum \lean{ex\_type},
-creating an inductive familty of types.
+creating an inductive family of types.
 Each constructor allows specific members of the \ex family in its arguments
 and returns a specific type of \ex:
 \begin{lstlisting}
@@ -159,7 +159,7 @@ inductive ex : ex_type → Type
 %Here, the `sum` constructor represents $+$, `prod` represents $*$ and `exp` represents $\^$,
 %the `zero` and `coeff` constructors represent zero and non-zero numeric coefficients,
 %the `var` constructor represents an atom and
-The additional \lean{ex\_info} record passed to the constructors contains auxilliary information used to construct correctness proofs.
+The additional \lean{ex\_info} record passed to the constructors contains auxiliary information used to construct correctness proofs.
 The \lean{sum\_b} constructor allows sums as the base of a power, analogously to the brackets in $(a + b) ^ c$.
 
 For readability, we will write the \ex representation in symbols instead of the constructors of \ex.
@@ -318,7 +318,7 @@ because the required extra fields were hidden behind the \lean{ring\_exp\_m} and
 
 Since the tactic works bottom up,
 constructing normal forms by applying each operator to the normal form of its operands,
-after each operation the subproofs can be discarded.
+after each operation the sub-proofs can be discarded.
 Each \lean{ex} value carries its proof of normalisation,
 but as soon as an operation, such as adding two expressions $a$ and $b$, has finished,
 the normalisation proofs of $a$ and $b$ are no longer needed and are deleted.
