@@ -66,6 +66,7 @@ expressions in a commutative (semi)ring~\cite{mathlib}.
 This tactic can be directly invoked by the user
 and is called by the decision procedure \lean{linarith}.
 The utility of \ring is evident from the fact that it is invoked over 300 times in \mathlib.
+Analogous procedures exist in many theorem provers \cite{agda, hol_light, isabelle_hol}.
 
 The \ring tactic in Lean, and the tactic in Coq it is based on,
 use a Horner normal form representation of polynomials~\cite{ring-tactic}.
@@ -87,11 +88,13 @@ The Horner form fundamentally assumes the degree of a term is a constant integer
 so it cannot be simply modified to represent variable exponents,
 or more generally to represent \pow applied to compound expressions.
 The result is that \ring cannot prove that $2^{n+1} - 1 = 2 * 2^n - 1$ for a free variable $n : \mathbb{N}$.
+Although this example problem can be solved ad hoc by adding a rewrite rule $a^{b+1} = a * a^b$,
+this rule should not be applied unconditionally.
+For efficiency, a general-purpose tactic must avoid proving $a^{100} = a^{50} a^{50}$ by unfolding $a^{100}$ into a large term.
 
-The \ringexp tactic is a new normalisation tactic whose domain is a strict superset of \ring's,
-making it a drop-in replacement. % that can additionally solve goals such as $2^{n+1} - 1 = 2 * 2^n - 1$.
-In particular, \ringexp supports the operators $+$, $*$ and \pow, numerals and variables,
-and does so without sacrificing too much of the efficiency of \ring.
+The \ringexp tactic uses a new extensible normal form, currently supporting the operators $+$, $*$ and \pow, numerals and variables.
+Its domain is a strict superset of the domain of previous semiring tactics,
+without sacrificing too much of the efficiency of \ring.
 This paper describes the design and engineering challenges encountered in implementing \ringexp.
 
 The version of \ringexp discussed in this paper was merged into \mathlib in commit \texttt{5c09372658}.\footnote{\url{https://github.com/leanprover-community/mathlib/tree/5c09372658}}
@@ -107,8 +110,17 @@ The normal form should be designed in such a way that values of type \lean{ex} a
 if and only if the input expressions can be proved equal using the axioms of commutative semirings.
 From the \lean{ex} representation, the normalised output expression is constructed by the \lean{simple} function.
 Both \lean{eval} and \lean{simple} additionally return a proof showing the input and output expressions are equal.
-The \ringexp tactic does not use reflection but directly constructs proof terms, as is typical for tactics in \mathlib~\cite{mathlib}.
-%The `ex` representation is also used by an additional tactic `ring_exp_eq` to test expressions for equality.
+
+The \ringexp tactic does not use reflection but directly constructs proof terms,
+as is typical for tactics in \mathlib~\cite{mathlib}.
+Reflective tactics avoid the construction and checking of a large proof term
+by performing most computation in the form of a verified program during proof checking instead~\cite{reflection-tactics}.
+If the proof checker performs efficient reduction, this results in a significant speed-up of the tactic,
+at the same time as providing more correctness guarantees.
+Unfortunately, the advantages of reflection do not translate directly to Lean.
+Tactic execution in Lean occurs within a fast, optimising interpreter,
+while the simple kernel used in proof checking is not designed for efficient reduction~\cite{lean-tactics}.
+Achieving an acceptable speed for \ringexp requires other approaches to the benefits that reflection brings automatically.
 
 The language of semirings implemented by \ring, with binary operators $+$, $*$ and optionally $-$ and $/$,
 is extended in \ringexp with a binary exponentiation operator \pow.
@@ -159,7 +171,7 @@ inductive ex : ex_type → Type
 %the `zero` and `coeff` constructors represent zero and non-zero numeric coefficients,
 %the `var` constructor represents an atom and
 The additional \lean{ex\_info} record passed to the constructors contains auxiliary information used to construct correctness proofs.
-The \lean{sum\_b} constructor allows sums as the base of a power, analogously to the brackets in $(a + b) ^ c$.
+The \lean{sum\_b} constructor allows sums as the base of a power, analogously to the parentheses in $(a + b) ^ c$.
 
 For readability, we will write the \ex representation in symbols instead of the constructors of \ex.
 Thus, the term \lean{prod (exp (var n) (coeff 1)) (coeff 1)} (with \lean{ex\_info} fields omitted) can be written as $n^1 * 1$
@@ -177,7 +189,7 @@ in the normalised form $(2+0)^{n^1 * 1} * 1 + (-1) + 0$ of the Mersenne number $
 	& $+$	& $*$	& \pow	\\ \hline
 $+$	& $(a + b) + c = a + (b + c)$	& ---	& --- 	\\
 $*$	& \makecell{$(a + b) * c = a * c + b * c$; \\ $a * (b + c) = a * b + a * c$}	& $(a * b) * c = a * (b * c) $	& --- 	\\
-\pow	& $a ^ {b + c} = a ^ b + a ^ c$	& $(a * b) ^ c = a^c * b^c$	& $\left(a^b\right)^c = a^{b * c}$	\\
+\pow	& $a ^ {b + c} = a ^ b * a ^ c$	& $(a * b) ^ c = a^c * b^c$	& $\left(a^b\right)^c = a^{b * c}$	\\
 \end{tabular}
 }
 \end{table}
@@ -303,6 +315,9 @@ An important practical consideration in implementing \ringexp is its efficiency,
 Among the 300 calls to \ring in \mathlib, approximately half are invocations on linear expressions by the tactic \lean{linarith}.
 Since \ringexp is intended to work as a drop-in replacement for \lean{ring},
 its performance characteristics, especially for linear expressions, should be comparable.
+Because \ring is used often throughout \mathlib, its implementation is already quite optimised,
+and the Horner normal form is optimal on \ring's domain.
+A small slowdown compared to \ring is thus to be expected, as a tradeoff with \ringexp's larger domain.
 
 Optimising the code was a notable part of the implementation of \ringexp.
 % guided by Lean's built-in profiler.
@@ -332,7 +347,7 @@ The result of these optimisations can be quantified by comparing the running tim
 The performance measure is the tactic execution time reported by the Lean profiler,
 running on a 3 GHz Intel\textregistered\xspace Core\texttrademark\xspace i5-8500 CPU with 16 GB of RAM.
 On arbitrary expressions, the benchmark indicates that \ringexp is a constant factor of approximately $3.88$ times slower than \ring;
-on linear expressions such as passed by \lean{linarith}, 
+on linear expressions such as passed by \lean{linarith},
 \ringexp is $1.67$ times slower than \ring.
 % The benchmark also serves as a correctness test for \ringexp, checking that arbitrary expressions are correctly handled.
 

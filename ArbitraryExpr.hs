@@ -67,7 +67,7 @@ unifyTime str = case Text.stripSuffix "ms" str of
 runTest :: Int -> Expr -> IO Bool
 runTest size testcase = withTempFile $ \f -> do
   writeFile f $ testcaseFile testcase
-  (code, out, err) <- readProcess $ proc "lean" [f]
+  (code, out, err) <- readProcess $ proc "lean" ["-j", "1", f]
   if code /= ExitSuccess then pure False else do
     let lines = Text.lines (decodeUtf8 out)
     let times = catMaybes $ flip map lines $ Text.stripPrefix "elaboration: tactic execution took " >=> unifyTime
