@@ -136,6 +136,22 @@ Two such expressions are considered equal if in every commutative semiring they 
 %The exponentation operator, however, does not have such nice associativity or distributivity properties:
 %in general, only `(a ^ b)^c = a ^ (b * c)` and `(a * b)^c = a^c * b^c` hold.
 
+\begin{figure}
+\begin{lstlisting}
+inductive ex_type : Type
+| sum | prod | exp | base
+inductive ex : ex_type → Type
+| zero  : ex_info →                     ex sum     -- 0
+| sum   : ex_info → ex prod →  ex sum → ex sum     -- +
+| coeff : ex_info →             coeff → ex prod    -- numerals
+| prod  : ex_info → ex exp  → ex prod → ex prod    -- *
+| exp   : ex_info → ex base → ex prod → ex exp     -- ^
+| var   : ex_info →              atom → ex base    -- atoms
+| sum_b : ex_info →            ex sum → ex base
+\end{lstlisting}
+\caption{Definition of \lean{ex\_type} and \ex.}
+\label{fig:def_ex}
+\end{figure}
 Using a suitable representation of the normal form is crucial to easily guarantee correctness of the normaliser.
 %For expressions in the language of rings, i.e. polynomials,
 %there are various possible representations with their own strengths.
@@ -153,21 +169,8 @@ Certain classes of non-normalised expressions are prohibited by restricting whic
 The \ex type captures these restrictions through a parameter in the enum \lean{ex\_type},
 creating an inductive family of types.
 Each constructor allows specific members of the \ex family in its arguments
-and returns a specific type of \ex:
-\begin{lstlisting}
-inductive ex_type : Type
-| sum | prod | exp | base
-inductive ex : ex_type → Type
-| zero  : ex_info →                     ex sum     -- 0
-| sum   : ex_info → ex prod →  ex sum → ex sum     -- +
-| coeff : ex_info →             coeff → ex prod    -- numerals
-| prod  : ex_info → ex exp  → ex prod → ex prod    -- *
-| exp   : ex_info → ex base → ex prod → ex exp     -- ^
-| var   : ex_info →              atom → ex base    -- atoms
-| sum_b : ex_info →            ex sum → ex base
-\end{lstlisting}
-Because constructors for different data types in Lean live in different
-namespaces, there is no ambiguity between \lean{ex.sum} and \lean{ex\_type.sum}.
+and returns a specific type of \ex.
+The full definition is given in Figure \ref{fig:def_ex}.
 %Here, the `sum` constructor represents $+$, `prod` represents $*$ and `exp` represents $\^$,
 %the `zero` and `coeff` constructors represent zero and non-zero numeric coefficients,
 %the `var` constructor represents an atom and
@@ -290,6 +293,10 @@ The tactic uses typeclass inference to determine whether the required extra stru
 When this is the case, the operators can be rewritten:
 $a - b$ becomes $a + (-1) * b$ in a ring
 and $a / b$ becomes $a * b^{-1}$ in a field.
+Otherwise, the subtraction or division is treated as an atom.
+Conditionally rewriting avoids the need for an almost-ring concept to treat semirings and rings uniformly~\cite{ring-tactic}.
+Cancellation of multiplication and division, such as $a * b / a = b$, is not supported by the tactic,
+since such lemmas require an $a \ne 0$ side condition, out of scope for \ringexp.
 In future work, extending the \lean{ex} type with a negation or multiplicative inverse constructor could allow for handling of these operators in more general cases.
 
 %Expressions that \ringexp cannot fully parse can still be usefully normalised:
@@ -318,9 +325,6 @@ An important practical consideration in implementing \ringexp is its efficiency,
 Among the 300 calls to \ring in \mathlib, approximately half are invocations on linear expressions by the tactic \lean{linarith}.
 Since \ringexp is intended to work as a drop-in replacement for \lean{ring},
 its performance characteristics, especially for linear expressions, should be comparable.
-Because \ring is used often throughout \mathlib, its implementation is already quite optimised,
-and the Horner normal form is optimal on \ring's domain.
-A small slowdown compared to \ring is thus to be expected, as a tradeoff with \ringexp's larger domain.
 
 Optimising the code was a notable part of the implementation of \ringexp.
 % guided by Lean's built-in profiler.
@@ -336,7 +340,7 @@ because the required extra fields were hidden behind the \lean{ring\_exp\_m} and
 %constructing normal forms by applying each operator to the normal form of its operands,
 %after each operation the sub-proofs can be discarded.
 %Each \lean{ex} value carries its proof of normalisation,
-%but as soon as an operation, such as multiplying an expressions $a$ by $0$, has finished,
+%but when it does not appear as a subterm of the normal form, such as $a$ in $a * 0 = 0$,
 %the normalisation proofs of $a$ is no longer needed and are deleted.
 %Similarly, any proof that reduces to reflexivity is deleted.
 %This results in smaller proof terms, reducing memory usage and type checking time.
@@ -353,12 +357,12 @@ On arbitrary expressions, the benchmark indicates that \ringexp is a constant fa
 on linear expressions such as passed by \lean{linarith},
 \ringexp is $1.67$ times slower than \ring.
 
-Where the average case has a constant factor difference,
-specific classes of problems show a distinct advantage for \ringexp through its improved support of exponents.
-The \ring tactic takes 2 seconds to normalise $x^{50} * x^{50}$, unfolding it into repeated multiplications,
-while \ringexp can directly add the coefficients, taking less than 100 ms.
-Another example that arose in practice is the goal $(1 + x^2 + x^4 + x^6) * (1 + x) = 1 + x + x^2 + x^3 + x^4 + x^5 + x^6 + x^7$, which took \ring 5 seconds to solve, while \ringexp takes 150 milliseconds.
-This seems to be a consequence of some optimisations implemented for \ringexp but not for \ring.
+Compared to a constant factor difference in the average cases,
+problems requiring efficient handling of (numeric) exponents show an advantage for \ringexp.
+The \ringexp is a factor 20 faster than \ring when showing $x^{50} * x^{50} = x^{100}$ in an arbitrary ring.
+A similar factor 20 speedup for \ringexp was found in practice, for the goal $(1 + x^2 + x^4 + x^6) * (1 + x) = 1 + x + x^2 + x^3 + x^4 + x^5 + x^6 + x^7$.
+The Horner normal form used by \ring is optimal for representing expressions with additions and multiplications,
+so a constant-factor slowdown compared to \ring on simpler goals is traded off for faster and more powerful handling of more complicated goals.
 
 % The benchmark also serves as a correctness test for \ringexp, checking that arbitrary expressions are correctly handled.
 
@@ -415,7 +419,7 @@ No. 016.Vidi.189.037, Lean Forward).
 
 Floris van Doorn, Mario Carneiro and Robert Y. Lewis reviewed the code and
 suggested improvements.
-Jasmin Blanchette, Robert Y. Lewis and Sander Dahmen read this paper and gave useful suggestions.
+The anonymous reviewers, Jasmin Blanchette, Kevin Buzzard, Robert Y. Lewis and Sander Dahmen read this paper and gave useful suggestions.
 Many thanks for the help!
 
 \printbibliography
