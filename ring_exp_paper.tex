@@ -2,12 +2,10 @@
 
 \usepackage{amsmath}
 \usepackage{amssymb}
-\usepackage[style=lncs]{biblatex}
-\usepackage{graphicx}
+\usepackage[backend=biber,style=lncs,doi=true]{biblatex}
 \usepackage{hyperref}
 \usepackage{layouts}
 \usepackage{makecell}
-\usepackage[caption=false]{subfig}
 \usepackage{xcolor}
 \usepackage{xspace}
 
@@ -24,7 +22,7 @@
 
 \title{A Lean tactic for normalising ring\\ expressions with exponents (short paper)}
 \titlerunning{A Lean tactic for normalising ring expressions with exponents}
-\author{Anne Baanen}
+\author{Anne Baanen\orcidID{0000-0001-8497-3683}}
 \authorrunning{T. Baanen}
 \institute{Vrije Universiteit Amsterdam, Amsterdam, The Netherlands\\\email{t.baanen@vu.nl}}
 
@@ -63,7 +61,7 @@ For instance, in \mathlib, the mathematical library for the Lean theorem prover~
 %\lean{abel} normalises expressions in an Abelian group,
 the \ring tactic normalises % polynomials, i.e.
 expressions in a commutative (semi)ring~\cite{mathlib}.
-Analogous tactics or conversions exist in many theorem provers \cite{agda-stdlib, hol_light, isabelle_hol}.
+Analogous tactics or conversions exist in many theorem provers \cite{hol_light, isabelle_hol, agda-stdlib}.
 The \ring tactic in Lean can be directly invoked by the user
 and is called by the decision procedure \lean{linarith}.
 The utility of \ring is evident from the fact that it is invoked over 300 times in \mathlib.
@@ -86,7 +84,7 @@ or more generally to represent \pow applied to compound expressions.
 The analogous procedures in other theorem provers have the same restriction.
 Adding rewrite rules such as $x^{n+1} \mapsto x * x^n$ is not a universal solution.
 Such a rule would unfold the expression $x^{100}$ into a large term composed of repeated multiplications,
-hurting the performance of the procedure significantly.
+reducing the performance of the procedure significantly.
 The result is that \ring cannot prove that $2^{n+1} - 1 = 2 * 2^n - 1$ for a free variable $n : \mathbb{N}$.
 
 The \ringexp tactic uses a new extensible normal form, currently supporting the operators $+$, $*$ and \pow, numerals and variables.
@@ -97,7 +95,7 @@ This paper describes the design and engineering challenges encountered in implem
 The version of \ringexp discussed in this paper was merged into \mathlib in commit \texttt{5c09372658}.\footnote{\url{https://github.com/leanprover-community/mathlib/tree/5c09372658}}
 Additional code and setup instructions are available online.\footnote{\url{https://github.com/lean-forward/ring_exp}}
 
-\section{Design overview}
+\section{Design Overview}
 
 The \ringexp tactic uses a normalisation scheme similar to the original \ring tactic.
 The input from the tactic system is an abstract syntax tree representing the expression to normalise.
@@ -108,14 +106,14 @@ if and only if the input expressions can be proved equal using the axioms of com
 From the \lean{ex} representation, the normalised output expression is constructed by the \lean{simple} function.
 Both \lean{eval} and \lean{simple} additionally return a proof showing the input and output expressions are equal.
 
-The \ringexp tactic does not use reflection but directly constructs proof terms,
+The \ringexp tactic does not use reflection but directly constructs proof terms to type checked by Lean's kernel,
 as is typical for tactics in \mathlib~\cite{mathlib}.
 Reflective tactics avoid the construction and checking of a large proof term
 by performing most computation during proof checking, running a verified program~\cite{reflection-tactics}.
 If the proof checker performs efficient reduction, this results in a significant speed-up of the tactic,
 at the same time as providing more correctness guarantees.
 Unfortunately, the advantages of reflection do not translate directly to Lean.
-Tactic execution in Lean occurs within a fast, optimising interpreter,
+Tactic execution in Lean occurs within a fast interpreter,
 while the kernel used in proof checking is designed for simplicity instead of efficient reduction~\cite{lean-tactics}.
 Achieving an acceptable speed for \ringexp requires other approaches to the benefits that reflection brings automatically.
 
@@ -149,7 +147,7 @@ inductive ex : ex_type → Type
 | var   : ex_info →              atom → ex base    -- atoms
 | sum_b : ex_info →            ex sum → ex base
 \end{lstlisting}
-\caption{Definition of \lean{ex\_type} and \ex.}
+\caption{Definition of \lean{ex\_type} and \ex}
 \label{fig:def_ex}
 \end{figure}
 Using a suitable representation of the normal form is crucial to easily guarantee correctness of the normaliser.
@@ -230,7 +228,7 @@ The operations on \ex build the correctness proof of normalisation out of the pr
 using a correctness lemma: for example, \lean{add\_pf\_z\_sum : ps = 0 → qs = qs' → ps + qs = qs'} constructs this proof for the input expression \lean{ps + qs} when \lean{ps} normalises to $0$.
 % These correctness proofs are stored in the \lean{ex\_info} record. % so they can be easily passed to other operations.
 
-Adding support for a new operator will take relatively little work:
+Adding support for a new operator would take relatively little work:
 after extending the table of associativity and distributivity relations,
 one can insert the constructor in \ex using the table to determine the relevant \lean{ex\_type}s,
 and add an operation on \ex that interprets the operator.
@@ -393,7 +391,7 @@ so a constant-factor slowdown compared to \ring on simpler goals is traded off f
 The \ring tactic for Coq and Lean can efficiently convert expressions in commutative semirings to normal form.
 %HOL Light has the normalising procedure \texttt{SEMIRING\_NORMALIZERS\_CONV} for expressions in $+$ and $*$ (which also supports exponentiation with a constant exponent), analogous to \ring.
 % This procedure powers \texttt{NUM\_NORMALIZE\_CONV} and \texttt{REAL\_POLY\_CONV}.
-A normalizing procedure for polynomials is also included with HOL Light~\cite{hol_light} and Isabelle/HOL~\cite{isabelle_hol},
+A normalizing procedure for polynomials is also included with the Agda standard library~\cite{agda-stdlib}, HOL Light~\cite{hol_light} and Isabelle/HOL~\cite{isabelle_hol},
 and decision procedures exist that support exponential functions~\cite{resolution-rcf};
 there is no single normalisation procedure supporting compound expressions in exponents.
 % \cite{coq-assoc-comm} is acrefl for coq, \cite{coq-lattices} uses a decision procedure without normalisation.
@@ -419,7 +417,7 @@ No. 016.Vidi.189.037, Lean Forward).
 
 Floris van Doorn, Mario Carneiro and Robert Y. Lewis reviewed the code and
 suggested improvements.
-The anonymous reviewers, Jasmin Blanchette, Kevin Buzzard, Robert Y. Lewis and Sander Dahmen read this paper and gave useful suggestions.
+The anonymous reviewers, Gabriel Ebner, Jasmin Blanchette, Kevin Buzzard, Robert Y. Lewis and Sander Dahmen read this paper and gave useful suggestions.
 Many thanks for the help!
 
 \printbibliography
