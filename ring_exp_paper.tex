@@ -3,8 +3,7 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage[backend=biber,style=lncs,doi=true]{biblatex}
-\usepackage{hyperref}
-\usepackage{layouts}
+% \usepackage{hyperref}
 \usepackage{makecell}
 \usepackage{xcolor}
 \usepackage{xspace}
@@ -106,7 +105,7 @@ if and only if the input expressions can be proved equal using the axioms of com
 From the \lean{ex} representation, the normalised output expression is constructed by the \lean{simple} function.
 Both \lean{eval} and \lean{simple} additionally return a proof showing the input and output expressions are equal.
 
-The \ringexp tactic does not use reflection but directly constructs proof terms to type checked by Lean's kernel,
+The \ringexp tactic does not use reflection but directly constructs proof terms to be type checked by Lean's kernel,
 as is typical for tactics in \mathlib~\cite{mathlib}.
 Reflective tactics avoid the construction and checking of a large proof term
 by performing most computation during proof checking, running a verified program~\cite{reflection-tactics}.
@@ -182,7 +181,7 @@ and the normalised form of $2^n - 1$ is written $(2+0)^{n^1 * 1} * 1 + (-1) + 0$
 
 \begin{table}
 \centering
-\caption{Associativity and distributivity properties of the $+$, $*$ and \pow operators.}
+\caption{Associativity and distributivity properties of the $+$, $*$ and \pow operators}
 \label{tab:assoc-distrib}
 {
 \setlength{\tabcolsep}{1em} % Add horizontal padding (absolute amount)
@@ -248,7 +247,7 @@ but commutative semirings have more equations.
 % if $a, b : \lean{ex prod}$, $a + (b + 0)$ and $b + (a + 0)$ represent the same expression.
 % $a + (b + 0)$ and $b + (a + 0)$ represent equal expressions.
 In a normal form, arguments to commutative operators should be sorted according to some linear order $\prec$: if $a \prec b$, then $a + (b + 0)$ is normalised and $b + (a + 0)$ is not.
-Defining a linear order on \ex requires an order on atoms; definitional equality of atoms is tested (with user control over which definitions get unfolded) in the \lean{tactic} monad~\cite{lean-tactics},
+Defining a linear order on \ex requires an order on atoms; definitional equality of atoms is tested (with user control over the amount of definitional unfolding) in the \lean{tactic} monad~\cite{lean-tactics},
 so a well-defined order on atoms cannot be easily expressed on the type level.
 % Unfortunately, operations on expressions such as testing for definitional equality requires the usage of the \lean{tactic} monad~\cite{lean-tactics},
 % making it unfeasible to enforce invariants on the type level.
@@ -352,13 +351,13 @@ The result of these optimisations can be quantified by comparing the running tim
 The performance measure is the tactic execution time reported by the Lean profiler,
 running on a 3 GHz Intel\textregistered\xspace Core\texttrademark\xspace i5-8500 CPU with 16 GB of RAM.
 On arbitrary expressions, the benchmark indicates that \ringexp is a constant factor of approximately $3.88$ times slower than \ring;
-on linear expressions such as passed by \lean{linarith},
+on linear expressions such as are passed by \lean{linarith},
 \ringexp is $1.67$ times slower than \ring.
 
 Compared to a constant factor difference in the average cases,
-problems requiring efficient handling of (numeric) exponents show an advantage for \ringexp.
-The \ringexp is a factor 20 faster than \ring when showing $x^{50} * x^{50} = x^{100}$ in an arbitrary ring.
-A similar factor 20 speedup for \ringexp was found in practice, for the goal $(1 + x^2 + x^4 + x^6) * (1 + x) = 1 + x + x^2 + x^3 + x^4 + x^5 + x^6 + x^7$.
+\ringexp has an advantage on problems requiring efficient handling of (numeric) exponents.
+The \ringexp tactic is a factor 20 faster than \ring when showing $x^{50} * x^{50} = x^{100}$ in an arbitrary ring.
+A similar speedup for \ringexp was found in practice, for the goal $(1 + x^2 + x^4 + x^6) * (1 + x) = 1 + x + x^2 + x^3 + x^4 + x^5 + x^6 + x^7$.
 The Horner normal form used by \ring is optimal for representing expressions with additions and multiplications,
 so a constant-factor slowdown compared to \ring on simpler goals is traded off for faster and more powerful handling of more complicated goals.
 
@@ -404,7 +403,7 @@ The extensible nature of the \ex type should make it simple to add support for m
 % including those not arising from algebra, such as casts~\cite{norm-cast}.
 Independently, it should be possible to adapt the \ex type to other algebraic structures
 such as lattices or vector spaces.
-Although more optimisations are needed to fully equal \ring in efficiency,
+Although more optimisations are needed to fully equal \ring in average case efficiency,
 the \ringexp tactic already achieves its goal of being a more general normalisation tactic.
 These results are as much a consequence of engineering effort as of theoretical work.
 
@@ -417,7 +416,7 @@ No. 016.Vidi.189.037, Lean Forward).
 
 Floris van Doorn, Mario Carneiro and Robert Y. Lewis reviewed the code and
 suggested improvements.
-The anonymous reviewers, Gabriel Ebner, Jasmin Blanchette, Kevin Buzzard, Robert Y. Lewis and Sander Dahmen read this paper and gave useful suggestions.
+Brian Gin-Ge Chen, Gabriel Ebner, Jasmin Blanchette, Kevin Buzzard, Robert Y. Lewis, Sander Dahmen and the anonymous reviewers read this paper and gave useful suggestions.
 Many thanks for the help!
 
 \printbibliography
