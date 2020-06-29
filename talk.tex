@@ -1,0 +1,144 @@
+\documentclass{beamer}
+
+\usepackage{fontspec}
+\usepackage{listings}
+\usepackage{xspace}
+\usepackage[backend=biber]{biblatex}
+
+\setmainfont{TeX Gyre Heros}
+\setmonofont{Fantasque Sans Mono}
+\lstset{basicstyle=\ttfamily\footnotesize}
+\usetheme{focus}
+\parskip=1\baselineskip
+\def\lstlanguagefiles{lstlean.tex}
+\lstset{language=lean}
+
+\definecolor{keywordcolor}{rgb}{0.7, 0.1, 0.1}   % red
+\definecolor{commentcolor}{rgb}{0.4, 0.4, 0.4}   % grey
+\definecolor{symbolcolor}{rgb}{0.4, 0.4, 0.4}    % grey
+\definecolor{sortcolor}{rgb}{0.1, 0.5, 0.1}      % green
+
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\lean}[1]{\texttt{#1}\xspace} % for writing Lean expressions
+\newcommand{\ex}{\lean{ex}}
+\newcommand{\mathlib}{\texttt{mathlib}\xspace}
+\newcommand{\pow}{{\ensuremath{{}^\wedge}}\xspace}
+\newcommand{\ring}{\lean{ring}}
+\newcommand{\ringexp}{\lean{ring\_exp}}
+
+\addbibresource{lean.bib}
+
+\title{A Lean tactic for normalising ring expressions with exponents}
+\author{Anne Baanen}
+\titlegraphic{\includegraphics[scale=.25]{lf_vu.png}}
+%\titlegraphic{\includegraphics[scale=.2]{vu.png}}
+\institute{\vspace{-\baselineskip}Lean Forward\\Vrije Universiteit Amsterdam}
+\date{\vspace{-\baselineskip}IJCAR, 2 July 2020}
+
+\begin{document}
+
+\frame{\titlepage}
+
+\begin{frame} \frametitle{Background}
+	Lean is a proof assistant based on the calculus of constructions~\cite{lean-prover}.\\
+	It has a simple kernel for proof checking and an elaborator with powerful tactic support.\\
+	The Lean community is developing \texttt{mathlib},
+	a repository of formalised classical mathematics proofs and proof automation.
+
+	The Lean Forward project aims to make proof assistants\\
+	accessible to mathematicians by developing proof automation informed by users' needs.
+\end{frame}
+
+\begin{frame} \frametitle{Background}
+	To a mathematician, the following is obvious:
+	\begin{align*}
+		2^{n+1} - 1 = 2 * 2^n - 1
+	\end{align*}
+	Lean should do it automatically.
+
+	The previous \ring tactic~\cite{ring-tactic} uses Horner normal form: efficient for the semiring operators $+$ and $*$,
+	but it doesn't support exponentiation $\pow$.
+
+\pause
+	It's not too hard to solve this manually:
+	rewrite $a^{n + 1} = a^n * a$ and \ring can finish by applying commutativity.
+
+	Such rules don't work unconditionally: $x^{100}$ should not become 100 multiplications of $x$.
+\end{frame}
+
+\begin{frame} \frametitle{Design overview}
+	\textbf{Goal:} a practical normalising tactic for expressions with $+$, $*$ and \pow, numerals (in $\Q$) and variables.
+	It should solve all goals that \ring can and be approximately as fast.
+
+\pause
+	To prove $a = b$, normalise $a$ giving $p_a : a = a'$ and normalise $b$ giving $p_b : b = b'$, then check $a'$ is identical to $b'$.
+	If identical, $p_a p_b^{-1}$ proves $a = b$.
+
+	Lean tactics typically construct proof terms directly (no reflection), since the elaborator is faster than the kernel.
+\end{frame}
+
+\begin{frame}[fragile]
+	The normal form is a syntax tree in the type family \lean{ex}.
+	The children for each node are restricted by a parameter \lean{ex\_type}:
+
+\begin{lstlisting}
+inductive ex_type : Type
+| sum | prod | exp | base
+inductive ex : ex_type → Type
+| zero  : ex_info →                     ex sum  -- 0
+| sum   : ex_info → ex prod →  ex sum → ex sum  -- +
+| coeff : ex_info →             coeff → ex prod -- rat
+| prod  : ex_info → ex exp  → ex prod → ex prod -- *
+| exp   : ex_info → ex base → ex prod → ex exp  -- ^
+| var   : ex_info →              atom → ex base -- atom
+| sum_b : ex_info →            ex sum → ex base -- (...)
+\end{lstlisting}
+
+	\begin{itemize}
+		\item $(a + b) + c$ is not allowed: left argument to \lean{sum} must be a product
+		\item $a * (b + c)$ is not allowed: right argument to \lean{prod} must be a product
+	\end{itemize}
+\end{frame}
+
+\begin{frame} \frametitle{Intricacies}
+Commutativity: pick a linear order $\prec$ on \lean{ex}.
+Then sort $a + b + c + \cdots$ so that $a \prec b \prec c \prec \cdots$.
+
+\pause
+To limit expression size, don't unfold $100 * a$ to $a + a + \cdots + a$.\\
+This means keeping track of coefficients.\\
+The function \lean{add\_overlap} decides when to add coefficients:
+\begin{align*}
+	&\lean{add\_overlap}\ (3 * x^2)\ (7 * x^2) &&= 10 * x^2 \\
+	&\lean{add\_overlap}\ (3 * x^2)\ (7 * y^2) &&= 3 * x^2 + 7 * y^2 \\
+	&\lean{add\_overlap}\ (3 * x^2)\ (-3 * x^2) &&= 0 &\text{(not $0 * x^2$)}
+\end{align*}
+\pause
+In a general semiring $R$, exponentiation has type $\pow : R \to \N \to R$.\\
+During execution, \ringexp keeps track of the current type\\
+using a reader monad transformer.
+\end{frame}
+
+\begin{frame} \frametitle{Optimisations}
+To be practical, the \ringexp tactic must be fast.\\
+The Horner form used by the \ring tactic is optimal for $+$ and $*$.\\
+Optimisation is needed to achieve acceptable running time.
+
+\pause
+Typeclass instances and implicit arguments cost time to infer,\\
+so they are cached as much as possible:\\
+instances are stored with the current type in the reader monad,\\
+implicit arguments and intermediate values in the \lean{ex\_info} field of \lean{ex}.
+
+\pause
+Result: on average a constant factor slowdown compared to \ring.\\
+Noticeably faster on problems with larger exponents\\
+($20$ times on $x^{50} * x^{50} = x^{100}$),
+also in practice for $(1 + x^2 + x^4 + x^6) * (1 + x) = 1 + x + x^2 + x^3 + x^4 + x^5 + x^6 + x^7$.
+\end{frame}
+
+\begin{frame}
+\printbibliography
+\end{frame}
+\end{document}
