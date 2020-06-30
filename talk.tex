@@ -3,12 +3,11 @@
 \usepackage{fontspec}
 \usepackage{listings}
 \usepackage{xspace}
-\usepackage[backend=biber]{biblatex}
 
 \setmainfont{TeX Gyre Heros}
 \setmonofont{Fantasque Sans Mono}
 \lstset{basicstyle=\ttfamily\footnotesize}
-\usetheme{focus}
+\usetheme[nofirafonts]{focus}
 \parskip=1\baselineskip
 \def\lstlanguagefiles{lstlean.tex}
 \lstset{language=lean}
@@ -27,9 +26,7 @@
 \newcommand{\ring}{\lean{ring}}
 \newcommand{\ringexp}{\lean{ring\_exp}}
 
-\addbibresource{lean.bib}
-
-\title{A Lean tactic for normalising ring expressions with exponents}
+\title{A Lean tactic for normalising\\ ring expressions with exponents}
 \author{Anne Baanen}
 \titlegraphic{\includegraphics[scale=.25]{lf_vu.png}}
 %\titlegraphic{\includegraphics[scale=.2]{vu.png}}
@@ -41,7 +38,7 @@
 \frame{\titlepage}
 
 \begin{frame} \frametitle{Background}
-	Lean is a proof assistant based on the calculus of constructions~\cite{lean-prover}.\\
+	Lean is a proof assistant based on the calculus of constructions.\\
 	It has a simple kernel for proof checking and an elaborator with powerful tactic support.\\
 	The Lean community is developing \texttt{mathlib},
 	a repository of formalised classical mathematics proofs and proof automation.
@@ -57,8 +54,8 @@
 	\end{align*}
 	Lean should do it automatically.
 
-	The previous \ring tactic~\cite{ring-tactic} uses Horner normal form: efficient for the semiring operators $+$ and $*$,
-	but it doesn't support exponentiation $\pow$.
+	The \ring tactic (in Lean and Coq) proves equations using Horner normal form: efficient for the semiring operators $+$ and $*$,
+	but it doesn't support exponentiation ($\pow$) by variables.
 
 \pause
 	It's not too hard to solve this manually:
@@ -67,15 +64,25 @@
 	Such rules don't work unconditionally: $x^{100}$ should not become 100 multiplications of $x$.
 \end{frame}
 
+\begin{frame} \frametitle{Background}
+More examples from \lean{mathlib}:
+{\small\begin{align*}
+	2^p * 2 &= 2^{p+1}\\
+	4 ^ m * 4 ^ {m + 1} &= 4 ^ {2m + 1}\\
+	x ^ {k + 2} - y ^ {k + 2} &= x * (x ^ {k + 1} - y ^ {k + 1}) + (x * y ^ {k + 1} - y ^ {k + 2}) \\
+	(x + y) (x ^ {n + 1} + (n + 1) x ^ {n + 1 - 1} y + z y ^ 2) &= x ^ {n + 2} +(n + 2) x ^ {n + 1} y +\\ &\hphantom{=} (xz + (n + 1) * x ^ n + zy) y ^ 2
+\end{align*}}
+\end{frame}
+
 \begin{frame} \frametitle{Design overview}
-	\textbf{Goal:} a practical normalising tactic for expressions with $+$, $*$ and \pow, numerals (in $\Q$) and variables.
+	\textbf{Goal:} a practical normalising tactic \ringexp for expressions with $+$, $*$ and \pow, numerals (in $\Q$) and variables.
 	It should solve all goals that \ring can and be approximately as fast.
 
 \pause
 	To prove $a = b$, normalise $a$ giving $p_a : a = a'$ and normalise $b$ giving $p_b : b = b'$, then check $a'$ is identical to $b'$.
-	If identical, $p_a p_b^{-1}$ proves $a = b$.
+	If identical, $\lean{eq.trans}\ p_a\ (\lean{eq.symm}\ p_b)$ proves $a = b$.
 
-	Lean tactics typically construct proof terms directly (no reflection), since the elaborator is faster than the kernel.
+	Lean tactics typically don't use reflection since producing proof terms (in the VM) tends to be faster than kernel reduction.
 \end{frame}
 
 \begin{frame}[fragile]
@@ -106,8 +113,8 @@ Commutativity: pick a linear order $\prec$ on \lean{ex}.
 Then sort $a + b + c + \cdots$ so that $a \prec b \prec c \prec \cdots$.
 
 \pause
-To limit expression size, don't unfold $100 * a$ to $a + a + \cdots + a$.\\
-This means keeping track of coefficients.\\
+To prevent exponential blowup, don't unfold $100 * a$ to $a + a + \cdots + a$.
+This means keeping track of coefficients.\\[\jot]
 The function \lean{add\_overlap} decides when to add coefficients:
 \begin{align*}
 	&\lean{add\_overlap}\ (3 * x^2)\ (7 * x^2) &&= 10 * x^2 \\
@@ -121,24 +128,23 @@ using a reader monad transformer.
 \end{frame}
 
 \begin{frame} \frametitle{Optimisations}
-To be practical, the \ringexp tactic must be fast.\\
-The Horner form used by the \ring tactic is optimal for $+$ and $*$.\\
-Optimisation is needed to achieve acceptable running time.
+To be practical, the \ringexp tactic must be fast and
+optimisation is needed to achieve acceptable running time.
+The Horner form used by the \ring tactic is optimal for $+$ and $*$.
 
 \pause
 Typeclass instances and implicit arguments cost time to infer,\\
-so they are cached as much as possible:\\
+so they are cached:\\
 instances are stored with the current type in the reader monad,\\
 implicit arguments and intermediate values in the \lean{ex\_info} field of \lean{ex}.
-
-\pause
-Result: on average a constant factor slowdown compared to \ring.\\
-Noticeably faster on problems with larger exponents\\
-($20$ times on $x^{50} * x^{50} = x^{100}$),
-also in practice for $(1 + x^2 + x^4 + x^6) * (1 + x) = 1 + x + x^2 + x^3 + x^4 + x^5 + x^6 + x^7$.
 \end{frame}
 
-\begin{frame}
-\printbibliography
+\begin{frame} \frametitle{Discussion}
+After optimisations, the running time of \ring and \ringexp are in the same order of magnitude.\\[\jot]
+On problems with larger exponents, \ringexp is noticeably faster\\
+($20$ times on $x^{50} * x^{50} = x^{100}$),
+also in practice for $(1 + x^2 + x^4 + x^6) * (1 + x) = 1 + x + x^2 + x^3 + x^4 + x^5 + x^6 + x^7$.
+
+Since the \lean{ex} type is an AST, extending \ringexp to other algebraic structures is relatively straightforward.
 \end{frame}
 \end{document}
